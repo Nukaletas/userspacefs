@@ -496,3 +496,6 @@ class FileSystem(object):
             handle._md['ctime'] = change_time
         if last_write_time is not None:
             handle._md['mtime'] = last_write_time
+
+    def close(self):
+        pass
