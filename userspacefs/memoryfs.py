@@ -365,7 +365,7 @@ class FileSystem(object):
         # id is the memory address of the md object
         return _File(self._md_from_id(id_), mode)
 
-    def x_read_stream(self, resolver):
+    def x_read_stream(self, resolver, offset=None):
         # this reads a snapshotted file resolved by resolver
         if isinstance(resolver, Path):
             md = self._get_file(resolver)
@@ -382,6 +382,9 @@ class FileSystem(object):
             d = md['data']
         else:
             d = md['revs'][rev_idx][1]
+
+        if offset is not None:
+            d = d[offset:]
 
         return _ReadStream(d)
 
