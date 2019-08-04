@@ -163,30 +163,56 @@ class _ReadStream(PositionIO):
         return True
 
 class _WriteStream(object):
-    def __init__(self, fs, resolver, write_mode, autorename):
-        if autorename:
-            raise NotImplementedError("autorename not supported yet!")
+    def __init__(self, fs):
         self._fs = fs
-        self._resolver = resolver
-        self._write_mode = write_mode
         self._buf = io.BytesIO()
 
     def write(self, data):
         self._buf.write(data)
 
     def close(self):
+        pass
+
+    def finish(self, resolver, mode="add", strict_conflict=False,
+               mtime=None):
         # this reads a snapshotted file resolved by resolver
-        if isinstance(self._resolver, Path):
-            mode = os.O_CREAT
-            if self._write_mode == "add":
-                mode = mode | os.O_EXCL
-            md = self._fs._get_file(self._resolver, mode=mode)
+        if isinstance(resolver, Path):
+            mode_ = 0
+            if mode == "add":
+                mode_ = mode_ | os.O_CREAT
+                if strict_conflict:
+                    mode_ = mode_ | os.O_EXCL
+            elif mode == "overwrite":
+                mode_ = mode_ | os.O_CREAT
+            else:
+                assert (isinstance(mode, tuple) and
+                        mode[0] == 'update' and
+                        mode[1][:4] == 'rev:')
+
+            md = self._fs._get_file(resolver, mode=mode_)
         else:
-            md = self._fs._md_from_id(self._resolver)
+            assert (isinstance(mode, tuple) and
+                    mode[0] == 'update' and
+                    mode[1][:4] == 'rev:')
+
+            md = self._fs._md_from_id(resolver)
+
+        if mode == "add":
+            if get_size(md):
+                raise OSError(errno.EEXIST, os.strerror(errno.EEXIST))
+        elif mode == "overwrite":
+            pass
+        else:
+            if ((strict_conflict or get_size(md)) and
+                mode[1] != get_rev(md)):
+                raise OSError(errno.EEXIST, os.strerror(errno.EEXIST))
+
+        if mtime is None:
+            mtime = datetime.utcnow()
 
         with md['lock']:
             d = md['data'] = self._buf.getvalue()
-            m = md['mtime'] = datetime.utcnow()
+            m = md['mtime'] = mtime
             c = md['ctime'] = datetime.utcnow()
             md['revs'].append((m, d))
             rev = get_rev(md)
@@ -359,8 +385,8 @@ class FileSystem(object):
 
         return _ReadStream(d)
 
-    def x_write_stream(self, id_, write_mode="add", autorename=False):
-        return _WriteStream(self, id_, write_mode, autorename)
+    def x_write_stream(self):
+        return _WriteStream(self)
 
     def open_directory(self, path):
         md = self._get_file(path)
