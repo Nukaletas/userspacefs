@@ -228,7 +228,7 @@ class _WriteStream(object):
                          size=len(d),
                          server_modified=c,
                          id=get_id(md),
-                         rev=rev)
+                         rev=rev[4:])
 
 class FileSystem(object):
     def __init__(self, tree=()):
